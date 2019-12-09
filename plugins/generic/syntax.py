@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import re
 
+from lib.core.common import Backend
+from lib.core.convert import getBytes
+from lib.core.data import conf
+from lib.core.enums import DBMS
 from lib.core.exception import SqlmapUndefinedMethod
 
-class Syntax:
+class Syntax(object):
     """
     This class defines generic syntax functionalities for plugins.
     """
@@ -22,10 +26,15 @@ class Syntax:
         retVal = expression
 
         if quote:
-            for item in re.findall(r"'[^']*'+", expression, re.S):
-                _ = item[1:-1]
-                if _:
-                    retVal = retVal.replace(item, escaper(_))
+            for item in re.findall(r"'[^']*'+", expression):
+                original = item[1:-1]
+                if original and re.search(r"\[(SLEEPTIME|RAND)", original) is None:  # e.g. '[SLEEPTIME]' marker
+                    replacement = escaper(original) if not conf.noEscape else original
+
+                    if replacement != original:
+                        retVal = retVal.replace(item, replacement)
+                    elif len(original) != len(getBytes(original)) and "n'%s'" % original not in retVal and Backend.getDbms() in (DBMS.MYSQL, DBMS.PGSQL, DBMS.ORACLE, DBMS.MSSQL):
+                        retVal = retVal.replace("'%s'" % original, "n'%s'" % original)
         else:
             retVal = escaper(expression)
 

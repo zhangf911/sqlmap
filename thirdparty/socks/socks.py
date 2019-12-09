@@ -52,7 +52,7 @@ PROXY_TYPE_SOCKS5 = 2
 PROXY_TYPE_HTTP = 3
 
 _defaultproxy = None
-_orgsocket = socket.socket
+socket._orig_socket = _orgsocket = _orig_socket = socket.socket
 _orgcreateconnection = socket.create_connection
 
 class ProxyError(Exception): pass
@@ -109,7 +109,11 @@ def wrapmodule(module):
     """
     if _defaultproxy != None:
         module.socket.socket = socksocket
-        module.socket.create_connection = create_connection
+        if _defaultproxy[0] == PROXY_TYPE_SOCKS4:
+            # Note: unable to prevent DNS leakage in SOCKS4 (Reference: https://security.stackexchange.com/a/171280)
+            pass
+        else:
+            module.socket.create_connection = create_connection
     else:
         raise GeneralProxyError((4, "no proxy specified"))
 
@@ -221,7 +225,7 @@ class socksocket(socket.socket):
             if self.__proxy[3]:
                 # Resolve remotely
                 ipaddr = None
-                req = req + chr(0x03).encode() + chr(len(destaddr)).encode() + destaddr
+                req = req + chr(0x03).encode() + chr(len(destaddr)).encode() + (destaddr if isinstance(destaddr, bytes) else destaddr.encode())
             else:
                 # Resolve locally
                 ipaddr = socket.inet_aton(socket.gethostbyname(destaddr))

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 from lib.core.common import Backend
@@ -45,9 +45,11 @@ class Fingerprint(GenericFingerprint):
         value += "active fingerprint: %s" % actVer
 
         if kb.bannerFp:
-            banVer = kb.bannerFp["dbmsVersion"] if 'dbmsVersion' in kb.bannerFp else None
-            banVer = Format.getDbms([banVer])
-            value += "\n%sbanner parsing fingerprint: %s" % (blank, banVer)
+            banVer = kb.bannerFp.get("dbmsVersion")
+
+            if banVer:
+                banVer = Format.getDbms([banVer])
+                value += "\n%sbanner parsing fingerprint: %s" % (blank, banVer)
 
         htmlErrorFp = Format.getErrorParsedDBMSes()
 
@@ -60,10 +62,10 @@ class Fingerprint(GenericFingerprint):
         """
         References for fingerprint:
 
-        * http://www.postgresql.org/docs/9.1/interactive/release.html (up to 9.1.3)
+        * https://www.postgresql.org/docs/current/static/release.html
         """
 
-        if not conf.extensiveFp and (Backend.isDbmsWithin(PGSQL_ALIASES) or (conf.dbms or "").lower() in PGSQL_ALIASES):
+        if not conf.extensiveFp and Backend.isDbmsWithin(PGSQL_ALIASES):
             setDbms(DBMS.PGSQL)
 
             self.getBanner()
@@ -73,7 +75,7 @@ class Fingerprint(GenericFingerprint):
         infoMsg = "testing %s" % DBMS.PGSQL
         logger.info(infoMsg)
 
-        result = inject.checkBooleanExpression("[RANDNUM]::int=[RANDNUM]")
+        result = inject.checkBooleanExpression("QUOTE_IDENT(NULL) IS NULL")
 
         if result:
             infoMsg = "confirming %s" % DBMS.PGSQL
@@ -97,8 +99,22 @@ class Fingerprint(GenericFingerprint):
             infoMsg = "actively fingerprinting %s" % DBMS.PGSQL
             logger.info(infoMsg)
 
-            if inject.checkBooleanExpression("REVERSE('sqlmap')='pamlqs'"):
-                Backend.setVersion(">= 9.1.0")
+            if inject.checkBooleanExpression("SHA256(NULL) IS NULL"):
+                Backend.setVersion(">= 11.0")
+            elif inject.checkBooleanExpression("XMLTABLE(NULL) IS NULL"):
+                Backend.setVersionList([">= 10.0", "< 11.0"])
+            elif inject.checkBooleanExpression("SIND(0)=0"):
+                Backend.setVersionList([">= 9.6.0", "< 10.0"])
+            elif inject.checkBooleanExpression("TO_JSONB(1) IS NOT NULL"):
+                Backend.setVersionList([">= 9.5.0", "< 9.6.0"])
+            elif inject.checkBooleanExpression("JSON_TYPEOF(NULL) IS NULL"):
+                Backend.setVersionList([">= 9.4.0", "< 9.5.0"])
+            elif inject.checkBooleanExpression("ARRAY_REPLACE(NULL,1,1) IS NULL"):
+                Backend.setVersionList([">= 9.3.0", "< 9.4.0"])
+            elif inject.checkBooleanExpression("ROW_TO_JSON(NULL) IS NULL"):
+                Backend.setVersionList([">= 9.2.0", "< 9.3.0"])
+            elif inject.checkBooleanExpression("REVERSE('sqlmap')='pamlqs'"):
+                Backend.setVersionList([">= 9.1.0", "< 9.2.0"])
             elif inject.checkBooleanExpression("LENGTH(TO_CHAR(1,'EEEE'))>0"):
                 Backend.setVersionList([">= 9.0.0", "< 9.1.0"])
             elif inject.checkBooleanExpression("2=(SELECT DIV(6,3))"):

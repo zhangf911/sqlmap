@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 from lib.core.common import Backend
@@ -14,7 +14,6 @@ from lib.core.dicts import FROM_DUMMY_TABLE
 from lib.core.exception import SqlmapNotVulnerableException
 from lib.techniques.dns.use import dnsUse
 
-
 def dnsTest(payload):
     logger.info("testing for data retrieval through DNS channel")
 
@@ -24,7 +23,7 @@ def dnsTest(payload):
     if not kb.dnsTest:
         errMsg = "data retrieval through DNS channel failed"
         if not conf.forceDns:
-            conf.dnsName = None
+            conf.dnsDomain = None
             errMsg += ". Turning off DNS exfiltration support"
             logger.error(errMsg)
         else:

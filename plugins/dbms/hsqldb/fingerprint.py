@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import re
@@ -16,7 +16,6 @@ from lib.core.data import logger
 from lib.core.enums import DBMS
 from lib.core.session import setDbms
 from lib.core.settings import HSQLDB_ALIASES
-from lib.core.settings import UNKNOWN_DBMS_VERSION
 from lib.request import inject
 from plugins.generic.fingerprint import Fingerprint as GenericFingerprint
 
@@ -28,13 +27,13 @@ class Fingerprint(GenericFingerprint):
         value = ""
         wsOsFp = Format.getOs("web server", kb.headersFp)
 
-        if wsOsFp and not hasattr(conf, "api"):
+        if wsOsFp and not conf.api:
             value += "%s\n" % wsOsFp
 
         if kb.data.banner:
             dbmsOsFp = Format.getOs("back-end DBMS", kb.bannerFp)
 
-            if dbmsOsFp and not hasattr(conf, "api"):
+            if dbmsOsFp and not conf.api:
                 value += "%s\n" % dbmsOsFp
 
         value += "back-end DBMS: "
@@ -48,13 +47,14 @@ class Fingerprint(GenericFingerprint):
         value += "active fingerprint: %s" % actVer
 
         if kb.bannerFp:
-            banVer = kb.bannerFp["dbmsVersion"] if 'dbmsVersion' in kb.bannerFp else None
+            banVer = kb.bannerFp.get("dbmsVersion")
 
-            if re.search("-log$", kb.data.banner):
-                banVer += ", logging enabled"
+            if banVer:
+                if re.search(r"-log$", kb.data.banner or ""):
+                    banVer += ", logging enabled"
 
-            banVer = Format.getDbms([banVer] if banVer else None)
-            value += "\n%sbanner parsing fingerprint: %s" % (blank, banVer)
+                banVer = Format.getDbms([banVer])
+                value += "\n%sbanner parsing fingerprint: %s" % (blank, banVer)
 
         htmlErrorFp = Format.getErrorParsedDBMSes()
 
@@ -80,15 +80,7 @@ class Fingerprint(GenericFingerprint):
 
         """
 
-        if not conf.extensiveFp and (Backend.isDbmsWithin(HSQLDB_ALIASES) \
-           or (conf.dbms or "").lower() in HSQLDB_ALIASES) and Backend.getVersion() and \
-           Backend.getVersion() != UNKNOWN_DBMS_VERSION:
-            v = Backend.getVersion().replace(">", "")
-            v = v.replace("=", "")
-            v = v.replace(" ", "")
-
-            Backend.setVersion(v)
-
+        if not conf.extensiveFp and Backend.isDbmsWithin(HSQLDB_ALIASES):
             setDbms("%s %s" % (DBMS.HSQLDB, Backend.getVersion()))
 
             if Backend.isVersionGreaterOrEqualThan("1.7.2"):
@@ -115,6 +107,13 @@ class Fingerprint(GenericFingerprint):
 
                 return False
             else:
+                result = inject.checkBooleanExpression("ZERO() IS 0")   # Note: check for H2 DBMS (sharing majority of same functions)
+                if result:
+                    warnMsg = "the back-end DBMS is not %s" % DBMS.HSQLDB
+                    logger.warn(warnMsg)
+
+                    return False
+
                 kb.data.has_information_schema = True
                 Backend.setVersion(">= 1.7.2")
                 setDbms("%s 1.7.2" % DBMS.HSQLDB)
@@ -134,8 +133,11 @@ class Fingerprint(GenericFingerprint):
 
             return True
         else:
-            warnMsg = "the back-end DBMS is not %s or version is < 1.7.2" % DBMS.HSQLDB
+            warnMsg = "the back-end DBMS is not %s" % DBMS.HSQLDB
             logger.warn(warnMsg)
+
+            dbgMsg = "...or version is < 1.7.2"
+            logger.debug(dbgMsg)
 
             return False
 

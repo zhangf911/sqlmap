@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import os
@@ -21,7 +21,7 @@ def dependencies():
 
 def tamper(payload, **kwargs):
     """
-    Adds versioned MySQL comment before each keyword
+    Adds (MySQL) versioned comment before each keyword
 
     Requirement:
         * MySQL < 5.1
@@ -49,7 +49,7 @@ def tamper(payload, **kwargs):
     retVal = payload
 
     if payload:
-        retVal = re.sub(r"(?<=\W)(?P<word>[A-Za-z_]+)(?=\W|\Z)", lambda match: process(match), retVal)
+        retVal = re.sub(r"(?<=\W)(?P<word>[A-Za-z_]+)(?=\W|\Z)", process, retVal)
         retVal = retVal.replace(" /*!0", "/*!0")
 
     return retVal

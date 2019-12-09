@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import re
@@ -53,11 +53,11 @@ class MSSQLBannerHandler(ContentHandler):
         elif name == "servicepack":
             self._inServicePack = True
 
-    def characters(self, data):
+    def characters(self, content):
         if self._inVersion:
-            self._version += sanitizeStr(data)
+            self._version += sanitizeStr(content)
         elif self._inServicePack:
-            self._servicePack += sanitizeStr(data)
+            self._servicePack += sanitizeStr(content)
 
     def endElement(self, name):
         if name == "signature":

@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
+
+import re
 
 from lib.core.agent import agent
 from lib.core.common import arrayizeValue
@@ -33,10 +35,11 @@ from lib.core.exception import SqlmapUserQuitException
 from lib.core.settings import CURRENT_DB
 from lib.core.settings import METADB_SUFFIX
 from lib.request import inject
-from lib.techniques.brute.use import columnExists
-from lib.techniques.brute.use import tableExists
+from lib.utils.brute import columnExists
+from lib.utils.brute import tableExists
+from thirdparty import six
 
-class Search:
+class Search(object):
     """
     This class defines search functionalities for plugins.
     """
@@ -47,7 +50,7 @@ class Search:
     def searchDb(self):
         foundDbs = []
         rootQuery = queries[Backend.getIdentifiedDbms()].search_db
-        dbList = conf.db.split(",")
+        dbList = conf.db.split(',')
 
         if Backend.isDbms(DBMS.MYSQL) and not kb.data.has_information_schema:
             dbCond = rootQuery.inband.condition2
@@ -60,7 +63,7 @@ class Search:
             values = []
             db = safeSQLIdentificatorNaming(db)
 
-            if Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2):
+            if Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2, DBMS.HSQLDB, DBMS.H2):
                 db = db.upper()
 
             infoMsg = "searching database"
@@ -146,18 +149,18 @@ class Search:
 
         if bruteForce:
             message = "do you want to use common table existence check? %s" % ("[Y/n/q]" if Backend.getIdentifiedDbms() in (DBMS.ACCESS,) else "[y/N/q]")
-            test = readInput(message, default="Y" if "Y" in message else "N")
+            choice = readInput(message, default='Y' if 'Y' in message else 'N').upper()
 
-            if test[0] in ("n", "N"):
+            if choice == 'N':
                 return
-            elif test[0] in ("q", "Q"):
+            elif choice == 'Q':
                 raise SqlmapUserQuitException
             else:
-                regex = "|".join(conf.tbl.split(","))
+                regex = '|'.join(conf.tbl.split(','))
                 return tableExists(paths.COMMON_TABLES, regex)
 
         foundTbls = {}
-        tblList = conf.tbl.split(",")
+        tblList = conf.tbl.split(',')
         rootQuery = queries[Backend.getIdentifiedDbms()].search_table
         tblCond = rootQuery.inband.condition
         dbCond = rootQuery.inband.condition2
@@ -167,22 +170,26 @@ class Search:
             values = []
             tbl = safeSQLIdentificatorNaming(tbl, True)
 
-            if Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2, DBMS.FIREBIRD):
+            if Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2, DBMS.FIREBIRD, DBMS.HSQLDB, DBMS.H2):
                 tbl = tbl.upper()
+                conf.db = conf.db.upper() if conf.db else conf.db
 
             infoMsg = "searching table"
-            if tblConsider == "1":
+            if tblConsider == '1':
                 infoMsg += "s LIKE"
             infoMsg += " '%s'" % unsafeSQLIdentificatorNaming(tbl)
 
-            if dbCond and conf.db and conf.db != CURRENT_DB:
-                _ = conf.db.split(",")
+            if conf.db == CURRENT_DB:
+                conf.db = self.getCurrentDb()
+
+            if dbCond and conf.db:
+                _ = conf.db.split(',')
                 whereDbsQuery = " AND (" + " OR ".join("%s = '%s'" % (dbCond, unsafeSQLIdentificatorNaming(db)) for db in _) + ")"
                 infoMsg += " for database%s '%s'" % ("s" if len(_) > 1 else "", ", ".join(db for db in _))
             elif conf.excludeSysDbs:
                 whereDbsQuery = "".join(" AND '%s' != %s" % (unsafeSQLIdentificatorNaming(db), dbCond) for db in self.excludeDbsList)
-                infoMsg2 = "skipping system database%s '%s'" % ("s" if len(self.excludeDbsList) > 1 else "", ", ".join(db for db in self.excludeDbsList))
-                logger.info(infoMsg2)
+                msg = "skipping system database%s '%s'" % ("s" if len(self.excludeDbsList) > 1 else "", ", ".join(db for db in self.excludeDbsList))
+                logger.info(msg)
             else:
                 whereDbsQuery = ""
 
@@ -200,7 +207,7 @@ class Search:
                 if values and Backend.getIdentifiedDbms() in (DBMS.SQLITE, DBMS.FIREBIRD):
                     newValues = []
 
-                    if isinstance(values, basestring):
+                    if isinstance(values, six.string_types):
                         values = [values]
                     for value in values:
                         dbName = "SQLite" if Backend.isDbms(DBMS.SQLITE) else "Firebird"
@@ -261,7 +268,7 @@ class Search:
                         if tblConsider == "2":
                             continue
                     else:
-                        for db in conf.db.split(",") if conf.db else (self.getCurrentDb(),):
+                        for db in conf.db.split(',') if conf.db else (self.getCurrentDb(),):
                             db = safeSQLIdentificatorNaming(db)
                             if db not in foundTbls:
                                 foundTbls[db] = []
@@ -269,7 +276,7 @@ class Search:
                     dbName = "SQLite" if Backend.isDbms(DBMS.SQLITE) else "Firebird"
                     foundTbls["%s%s" % (dbName, METADB_SUFFIX)] = []
 
-                for db in foundTbls.keys():
+                for db in foundTbls:
                     db = safeSQLIdentificatorNaming(db)
 
                     infoMsg = "fetching number of table"
@@ -300,7 +307,9 @@ class Search:
                     for index in indexRange:
                         query = rootQuery.blind.query2
 
-                        if query.endswith("'%s')"):
+                        if " ORDER BY " in query:
+                            query = query.replace(" ORDER BY ", "%s ORDER BY " % (" AND %s" % tblQuery))
+                        elif query.endswith("'%s')"):
                             query = query[:-1] + " AND %s)" % tblQuery
                         else:
                             query += " AND %s" % tblQuery
@@ -320,7 +329,7 @@ class Search:
                             foundTbl = safeSQLIdentificatorNaming(foundTbl, True)
                             foundTbls[db].append(foundTbl)
 
-        for db in foundTbls.keys():
+        for db in list(foundTbls.keys()):
             if isNoneValue(foundTbls[db]):
                 del foundTbls[db]
 
@@ -342,20 +351,19 @@ class Search:
 
         if bruteForce:
             message = "do you want to use common column existence check? %s" % ("[Y/n/q]" if Backend.getIdentifiedDbms() in (DBMS.ACCESS,) else "[y/N/q]")
-            test = readInput(message, default="Y" if "Y" in message else "N")
+            choice = readInput(message, default='Y' if 'Y' in message else 'N').upper()
 
-            if test[0] in ("n", "N"):
+            if choice == 'N':
                 return
-            elif test[0] in ("q", "Q"):
+            elif choice == 'Q':
                 raise SqlmapUserQuitException
             else:
                 regex = '|'.join(conf.col.split(','))
                 conf.dumper.dbTableColumns(columnExists(paths.COMMON_COLUMNS, regex))
 
                 message = "do you want to dump entries? [Y/n] "
-                output = readInput(message, default="Y")
 
-                if output and output[0] not in ("n", "N"):
+                if readInput(message, default='Y', boolean=True):
                     self.dumpAll()
 
                 return
@@ -367,10 +375,10 @@ class Search:
         whereTblsQuery = ""
         infoMsgTbl = ""
         infoMsgDb = ""
-        colList = conf.col.split(",")
+        colList = conf.col.split(',')
 
-        if conf.excludeCol:
-            colList = [_ for _ in colList if _ not in conf.excludeCol.split(',')]
+        if conf.exclude:
+            colList = [_ for _ in colList if re.search(conf.exclude, _, re.I) is None]
 
         origTbl = conf.tbl
         origDb = conf.db
@@ -385,8 +393,10 @@ class Search:
             conf.db = origDb
             conf.tbl = origTbl
 
-            if Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2):
+            if Backend.getIdentifiedDbms() in (DBMS.ORACLE, DBMS.DB2, DBMS.HSQLDB, DBMS.H2):
                 column = column.upper()
+                conf.db = conf.db.upper() if conf.db else conf.db
+                conf.tbl = conf.tbl.upper() if conf.tbl else conf.tbl
 
             infoMsg = "searching column"
             if colConsider == "1":
@@ -396,18 +406,21 @@ class Search:
             foundCols[column] = {}
 
             if conf.tbl:
-                _ = conf.tbl.split(",")
+                _ = conf.tbl.split(',')
                 whereTblsQuery = " AND (" + " OR ".join("%s = '%s'" % (tblCond, unsafeSQLIdentificatorNaming(tbl)) for tbl in _) + ")"
                 infoMsgTbl = " for table%s '%s'" % ("s" if len(_) > 1 else "", ", ".join(unsafeSQLIdentificatorNaming(tbl) for tbl in _))
 
-            if conf.db and conf.db != CURRENT_DB:
-                _ = conf.db.split(",")
+            if conf.db == CURRENT_DB:
+                conf.db = self.getCurrentDb()
+
+            if conf.db:
+                _ = conf.db.split(',')
                 whereDbsQuery = " AND (" + " OR ".join("%s = '%s'" % (dbCond, unsafeSQLIdentificatorNaming(db)) for db in _) + ")"
                 infoMsgDb = " in database%s '%s'" % ("s" if len(_) > 1 else "", ", ".join(unsafeSQLIdentificatorNaming(db) for db in _))
             elif conf.excludeSysDbs:
                 whereDbsQuery = "".join(" AND %s != '%s'" % (dbCond, unsafeSQLIdentificatorNaming(db)) for db in self.excludeDbsList)
-                infoMsg2 = "skipping system database%s '%s'" % ("s" if len(self.excludeDbsList) > 1 else "", ", ".join(unsafeSQLIdentificatorNaming(db) for db in self.excludeDbsList))
-                logger.info(infoMsg2)
+                msg = "skipping system database%s '%s'" % ("s" if len(self.excludeDbsList) > 1 else "", ", ".join(unsafeSQLIdentificatorNaming(db) for db in self.excludeDbsList))
+                logger.info(msg)
             else:
                 infoMsgDb = " across all databases"
 
@@ -428,13 +441,13 @@ class Search:
                     # column(s) provided
                     values = []
 
-                    for db in conf.db.split(","):
-                        for tbl in conf.tbl.split(","):
+                    for db in conf.db.split(','):
+                        for tbl in conf.tbl.split(','):
                             values.append([safeSQLIdentificatorNaming(db), safeSQLIdentificatorNaming(tbl, True)])
 
                 for db, tbl in filterPairValues(values):
                     db = safeSQLIdentificatorNaming(db)
-                    tbls = tbl.split(",") if not isNoneValue(tbl) else []
+                    tbls = tbl.split(',') if not isNoneValue(tbl) else []
 
                     for tbl in tbls:
                         tbl = safeSQLIdentificatorNaming(tbl, True)
@@ -501,7 +514,7 @@ class Search:
                         if db not in foundCols[column]:
                             foundCols[column][db] = []
                 else:
-                    for db in conf.db.split(",") if conf.db else (self.getCurrentDb(),):
+                    for db in conf.db.split(',') if conf.db else (self.getCurrentDb(),):
                         db = safeSQLIdentificatorNaming(db)
                         if db not in foundCols[column]:
                             foundCols[column][db] = []

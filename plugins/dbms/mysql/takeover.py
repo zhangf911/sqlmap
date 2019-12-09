@@ -1,17 +1,17 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import os
-import re
 
 from lib.core.agent import agent
 from lib.core.common import Backend
 from lib.core.common import decloakToTemp
 from lib.core.common import isStackingAvailable
+from lib.core.common import isWindowsDriveLetterPath
 from lib.core.common import normalizePath
 from lib.core.common import ntToPosixSlashes
 from lib.core.common import randomStr
@@ -49,7 +49,7 @@ class Takeover(GenericTakeover):
                 # Reference: http://dev.mysql.com/doc/refman/5.1/en/server-options.html#option_mysqld_basedir
                 self.__basedir = unArrayizeValue(inject.getValue("SELECT @@basedir"))
 
-                if re.search("^[\w]\:[\/\\\\]+", (self.__basedir or ""), re.I):
+                if isWindowsDriveLetterPath(self.__basedir or ""):
                     Backend.setOs(OS.WINDOWS)
                 else:
                     Backend.setOs(OS.LINUX)
@@ -67,10 +67,10 @@ class Takeover(GenericTakeover):
         # On MySQL 4.1 < 4.1.25 and on MySQL 4.1 >= 4.1.25 with NO plugin_dir set in my.ini configuration file
         # On MySQL 5.0 < 5.0.67 and on MySQL 5.0 >= 5.0.67 with NO plugin_dir set in my.ini configuration file
         else:
-            #logger.debug("retrieving MySQL data directory absolute path")
+            # logger.debug("retrieving MySQL data directory absolute path")
 
             # Reference: http://dev.mysql.com/doc/refman/5.1/en/server-options.html#option_mysqld_datadir
-            #self.__datadir = inject.getValue("SELECT @@datadir")
+            # self.__datadir = inject.getValue("SELECT @@datadir")
 
             # NOTE: specifying the relative path as './udf.dll'
             # saves in @@datadir on both MySQL 4.1 and MySQL 5.0

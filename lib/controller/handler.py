@@ -1,15 +1,16 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 from lib.core.common import Backend
 from lib.core.data import conf
-from lib.core.data import logger
+from lib.core.data import kb
 from lib.core.dicts import DBMS_DICT
 from lib.core.enums import DBMS
+from lib.core.exception import SqlmapConnectionException
 from lib.core.settings import MSSQL_ALIASES
 from lib.core.settings import MYSQL_ALIASES
 from lib.core.settings import ORACLE_ALIASES
@@ -21,6 +22,8 @@ from lib.core.settings import MAXDB_ALIASES
 from lib.core.settings import SYBASE_ALIASES
 from lib.core.settings import DB2_ALIASES
 from lib.core.settings import HSQLDB_ALIASES
+from lib.core.settings import H2_ALIASES
+from lib.core.settings import INFORMIX_ALIASES
 from lib.utils.sqlalchemy import SQLAlchemy
 
 from plugins.dbms.mssqlserver import MSSQLServerMap
@@ -45,6 +48,10 @@ from plugins.dbms.db2 import DB2Map
 from plugins.dbms.db2.connector import Connector as DB2Conn
 from plugins.dbms.hsqldb import HSQLDBMap
 from plugins.dbms.hsqldb.connector import Connector as HSQLDBConn
+from plugins.dbms.h2 import H2Map
+from plugins.dbms.h2.connector import Connector as H2Conn
+from plugins.dbms.informix import InformixMap
+from plugins.dbms.informix.connector import Connector as InformixConn
 
 def setHandler():
     """
@@ -53,55 +60,76 @@ def setHandler():
     """
 
     items = [
-                  (DBMS.MYSQL, MYSQL_ALIASES, MySQLMap, MySQLConn),
-                  (DBMS.ORACLE, ORACLE_ALIASES, OracleMap, OracleConn),
-                  (DBMS.PGSQL, PGSQL_ALIASES, PostgreSQLMap, PostgreSQLConn),
-                  (DBMS.MSSQL, MSSQL_ALIASES, MSSQLServerMap, MSSQLServerConn),
-                  (DBMS.SQLITE, SQLITE_ALIASES, SQLiteMap, SQLiteConn),
-                  (DBMS.ACCESS, ACCESS_ALIASES, AccessMap, AccessConn),
-                  (DBMS.FIREBIRD, FIREBIRD_ALIASES, FirebirdMap, FirebirdConn),
-                  (DBMS.MAXDB, MAXDB_ALIASES, MaxDBMap, MaxDBConn),
-                  (DBMS.SYBASE, SYBASE_ALIASES, SybaseMap, SybaseConn),
-                  (DBMS.DB2, DB2_ALIASES, DB2Map, DB2Conn),
-                  (DBMS.HSQLDB, HSQLDB_ALIASES, HSQLDBMap, HSQLDBConn),
-            ]
+        (DBMS.MYSQL, MYSQL_ALIASES, MySQLMap, MySQLConn),
+        (DBMS.ORACLE, ORACLE_ALIASES, OracleMap, OracleConn),
+        (DBMS.PGSQL, PGSQL_ALIASES, PostgreSQLMap, PostgreSQLConn),
+        (DBMS.MSSQL, MSSQL_ALIASES, MSSQLServerMap, MSSQLServerConn),
+        (DBMS.SQLITE, SQLITE_ALIASES, SQLiteMap, SQLiteConn),
+        (DBMS.ACCESS, ACCESS_ALIASES, AccessMap, AccessConn),
+        (DBMS.FIREBIRD, FIREBIRD_ALIASES, FirebirdMap, FirebirdConn),
+        (DBMS.MAXDB, MAXDB_ALIASES, MaxDBMap, MaxDBConn),
+        (DBMS.SYBASE, SYBASE_ALIASES, SybaseMap, SybaseConn),
+        (DBMS.DB2, DB2_ALIASES, DB2Map, DB2Conn),
+        (DBMS.HSQLDB, HSQLDB_ALIASES, HSQLDBMap, HSQLDBConn),
+        (DBMS.H2, H2_ALIASES, H2Map, H2Conn),
+        (DBMS.INFORMIX, INFORMIX_ALIASES, InformixMap, InformixConn),
+    ]
 
-    _ = max(_ if (Backend.getIdentifiedDbms() or "").lower() in _[1] else None for _ in items)
+    _ = max(_ if (conf.get("dbms") or Backend.getIdentifiedDbms() or kb.heuristicExtendedDbms or "").lower() in _[1] else () for _ in items)
     if _:
         items.remove(_)
         items.insert(0, _)
 
     for dbms, aliases, Handler, Connector in items:
-        if conf.dbms and conf.dbms.lower() != dbms and conf.dbms.lower() not in aliases:
-            debugMsg = "skipping test for %s" % dbms
-            logger.debug(debugMsg)
-            continue
+        if conf.forceDbms:
+            if conf.forceDbms.lower() not in aliases:
+                continue
+            else:
+                kb.dbms = conf.dbms = conf.forceDbms = dbms
+
+        if kb.dbmsFilter:
+            if dbms not in kb.dbmsFilter:
+                continue
 
         handler = Handler()
         conf.dbmsConnector = Connector()
 
         if conf.direct:
-            logger.debug("forcing timeout to 10 seconds")
-            conf.timeout = 10
-
+            exception = None
             dialect = DBMS_DICT[dbms][3]
 
             if dialect:
-                sqlalchemy = SQLAlchemy(dialect=dialect)
-                sqlalchemy.connect()
+                try:
+                    sqlalchemy = SQLAlchemy(dialect=dialect)
+                    sqlalchemy.connect()
 
-                if sqlalchemy.connector:
-                    conf.dbmsConnector = sqlalchemy
-                else:
-                    try:
-                        conf.dbmsConnector.connect()
-                    except NameError:
-                        pass
+                    if sqlalchemy.connector:
+                        conf.dbmsConnector = sqlalchemy
+                except Exception as ex:
+                    exception = ex
+
+            if not dialect or exception:
+                try:
+                    conf.dbmsConnector.connect()
+                except Exception as ex:
+                    if exception:
+                        raise exception
+                    else:
+                        if not isinstance(ex, NameError):
+                            raise
+                        else:
+                            msg = "support for direct connection to '%s' is not available. " % dbms
+                            msg += "Please rerun with '--dependencies'"
+                            raise SqlmapConnectionException(msg)
+
+        if conf.forceDbms == dbms or handler.checkDbms():
+            if kb.resolutionDbms:
+                conf.dbmsHandler = max(_ for _ in items if _[0] == kb.resolutionDbms)[2]()
+                conf.dbmsHandler._dbms = kb.resolutionDbms
             else:
-                conf.dbmsConnector.connect()
+                conf.dbmsHandler = handler
+                conf.dbmsHandler._dbms = dbms
 
-        if handler.checkDbms():
-            conf.dbmsHandler = handler
             break
         else:
             conf.dbmsConnector = None

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 from lib.core.enums import DBMS
@@ -24,11 +24,7 @@ class DB2Map(Syntax, Fingerprint, Enumeration, Filesystem, Miscellaneous, Takeov
     def __init__(self):
         self.excludeDbsList = DB2_SYSTEM_DBS
 
-        Syntax.__init__(self)
-        Fingerprint.__init__(self)
-        Enumeration.__init__(self)
-        Filesystem.__init__(self)
-        Miscellaneous.__init__(self)
-        Takeover.__init__(self)
+        for cls in self.__class__.__bases__:
+            cls.__init__(self)
 
     unescaper[DBMS.DB2] = Syntax.escape

@@ -1,19 +1,20 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 try:
     import jaydebeapi
     import jpype
-except ImportError, msg:
+except:
     pass
 
 import logging
 
 from lib.core.common import checkFile
+from lib.core.common import getSafeExString
 from lib.core.common import readInput
 from lib.core.data import conf
 from lib.core.data import logger
@@ -29,9 +30,6 @@ class Connector(GenericConnector):
     License: LGPL & Apache License 2.0
     """
 
-    def __init__(self):
-        GenericConnector.__init__(self)
-
     def connect(self):
         self.initConnection()
         try:
@@ -41,18 +39,15 @@ class Connector(GenericConnector):
             args = "-Djava.class.path=%s" % jar
             jvm_path = jpype.getDefaultJVMPath()
             jpype.startJVM(jvm_path, args)
-        except Exception, msg:
-            raise SqlmapConnectionException(msg[0])
+        except Exception as ex:
+            raise SqlmapConnectionException(getSafeExString(ex))
 
         try:
             driver = 'org.hsqldb.jdbc.JDBCDriver'
-            connection_string = 'jdbc:hsqldb:mem:.' #'jdbc:hsqldb:hsql://%s/%s' % (self.hostname, self.db)
-            self.connector = jaydebeapi.connect(driver,
-                                        connection_string,
-                                        str(self.user),
-                                        str(self.password))
-        except Exception, msg:
-            raise SqlmapConnectionException(msg[0])
+            connection_string = 'jdbc:hsqldb:mem:.'  # 'jdbc:hsqldb:hsql://%s/%s' % (self.hostname, self.db)
+            self.connector = jaydebeapi.connect(driver, connection_string, str(self.user), str(self.password))
+        except Exception as ex:
+            raise SqlmapConnectionException(getSafeExString(ex))
 
         self.initCursor()
         self.printConnected()
@@ -60,8 +55,8 @@ class Connector(GenericConnector):
     def fetchall(self):
         try:
             return self.cursor.fetchall()
-        except Exception, msg:
-            logger.log(logging.WARN if conf.dbmsHandler else logging.DEBUG, "(remote) %s" % msg[1])
+        except Exception as ex:
+            logger.log(logging.WARN if conf.dbmsHandler else logging.DEBUG, "(remote) '%s'" % getSafeExString(ex))
             return None
 
     def execute(self, query):
@@ -70,8 +65,8 @@ class Connector(GenericConnector):
         try:
             self.cursor.execute(query)
             retVal = True
-        except Exception, msg: #todo fix with specific error
-            logger.log(logging.WARN if conf.dbmsHandler else logging.DEBUG, "(remote) %s" % msg[1])
+        except Exception as ex:
+            logger.log(logging.WARN if conf.dbmsHandler else logging.DEBUG, "(remote) '%s'" % getSafeExString(ex))
 
         self.connector.commit()
 

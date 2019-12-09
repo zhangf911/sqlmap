@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 class SqlmapBaseException(Exception):
@@ -48,6 +48,9 @@ class SqlmapUserQuitException(SqlmapBaseException):
     pass
 
 class SqlmapShellQuitException(SqlmapBaseException):
+    pass
+
+class SqlmapSkipTargetException(SqlmapBaseException):
     pass
 
 class SqlmapSyntaxException(SqlmapBaseException):

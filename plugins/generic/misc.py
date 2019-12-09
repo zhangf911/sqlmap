@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import ntpath
@@ -28,7 +28,7 @@ from lib.core.exception import SqlmapNoneDataException
 from lib.core.exception import SqlmapUnsupportedFeatureException
 from lib.request import inject
 
-class Miscellaneous:
+class Miscellaneous(object):
     """
     This class defines miscellaneous functionalities for plugins.
     """
@@ -70,7 +70,7 @@ class Miscellaneous:
         conf.tmpPath = normalizePath(conf.tmpPath)
         conf.tmpPath = ntToPosixSlashes(conf.tmpPath)
 
-        singleTimeDebugMessage("going to use %s as temporary files directory" % conf.tmpPath)
+        singleTimeDebugMessage("going to use '%s' as temporary files directory" % conf.tmpPath)
 
         hashDBWrite(HASHDB_KEYS.CONF_TMP_PATH, conf.tmpPath)
 
@@ -101,7 +101,7 @@ class Miscellaneous:
             query = "SELECT %s" % query
 
         kb.bannerFp["dbmsVersion"] = unArrayizeValue(inject.getValue(query))
-        kb.bannerFp["dbmsVersion"] = (kb.bannerFp["dbmsVersion"] or "").replace(",", "").replace("-", "").replace(" ", "")
+        kb.bannerFp["dbmsVersion"] = (kb.bannerFp["dbmsVersion"] or "").replace(',', "").replace('-', "").replace(' ', "")
 
     def delRemoteFile(self, filename):
         if not filename:
@@ -137,7 +137,10 @@ class Miscellaneous:
             self.delRemoteFile(self.webStagerFilePath)
             self.delRemoteFile(self.webBackdoorFilePath)
 
-        if not isStackingAvailable() and not conf.direct:
+        if (not isStackingAvailable() or kb.udfFail) and not conf.direct:
+            return
+
+        if any((conf.osCmd, conf.osShell)) and Backend.isDbms(DBMS.PGSQL) and kb.copyExecTest:
             return
 
         if Backend.isOs(OS.WINDOWS):
@@ -162,16 +165,15 @@ class Miscellaneous:
             inject.goStacked("DROP TABLE %s" % self.cmdTblName, silent=True)
 
             if Backend.isDbms(DBMS.MSSQL):
-                udfDict = {"master..new_xp_cmdshell": None}
+                udfDict = {"master..new_xp_cmdshell": {}}
 
             if udfDict is None:
                 udfDict = self.sysUdfs
 
             for udf, inpRet in udfDict.items():
                 message = "do you want to remove UDF '%s'? [Y/n] " % udf
-                output = readInput(message, default="Y")
 
-                if not output or output in ("y", "Y"):
+                if readInput(message, default='Y', boolean=True):
                     dropStr = "DROP FUNCTION %s" % udf
 
                     if Backend.isDbms(DBMS.PGSQL):

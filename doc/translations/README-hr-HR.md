@@ -1,6 +1,6 @@
-sqlmap
-==
+# sqlmap
 
+[![Build Status](https://api.travis-ci.org/sqlmapproject/sqlmap.svg?branch=master)](https://travis-ci.org/sqlmapproject/sqlmap) [![Python 2.6|2.7|3.x](https://img.shields.io/badge/python-2.6|2.7|3.x-yellow.svg)](https://www.python.org/) [![License](https://img.shields.io/badge/license-GPLv2-red.svg)](https://raw.githubusercontent.com/sqlmapproject/sqlmap/master/LICENSE) [![PyPI version](https://badge.fury.io/py/sqlmap.svg)](https://badge.fury.io/py/sqlmap) [![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/sqlmapproject/sqlmap.svg?colorB=ff69b4)](https://github.com/sqlmapproject/sqlmap/issues?q=is%3Aissue+is%3Aclosed) [![Twitter](https://img.shields.io/badge/twitter-@sqlmap-blue.svg)](https://twitter.com/sqlmap)
 
 sqlmap je alat namijenjen za penetracijsko testiranje koji automatizira proces detekcije i eksploatacije sigurnosnih propusta SQL injekcije te preuzimanje poslužitelja baze podataka. Dolazi s moćnim mehanizmom za detekciju, mnoštvom korisnih opcija za napredno penetracijsko testiranje te široki spektar opcija od onih za prepoznavanja baze podataka, preko dohvaćanja podataka iz baze, do pristupa zahvaćenom datotečnom sustavu i izvršavanja komandi na operacijskom sustavu korištenjem tzv. "out-of-band" veza.
 
@@ -18,9 +18,9 @@ Možete preuzeti zadnji tarball klikom [ovdje](https://github.com/sqlmapproject/
 
 Po mogućnosti, možete preuzeti sqlmap kloniranjem [Git](https://github.com/sqlmapproject/sqlmap) repozitorija:
 
-    git clone https://github.com/sqlmapproject/sqlmap.git sqlmap-dev
+    git clone --depth 1 https://github.com/sqlmapproject/sqlmap.git sqlmap-dev
 
-sqlmap radi bez posebnih zahtjeva korištenjem [Python](http://www.python.org/download/) verzije **2.6.x** i/ili **2.7.x** na bilo kojoj platformi.
+sqlmap radi bez posebnih zahtjeva korištenjem [Python](http://www.python.org/download/) verzije **2.6**, **2.7** i/ili **3.x** na bilo kojoj platformi.
 
 Korištenje
 ----
@@ -33,8 +33,8 @@ Kako biste dobili listu svih opcija i prekidača koristite:
 
     python sqlmap.py -hh
 
-Možete pronaći primjer izvršavanja [ovdje](https://gist.github.com/stamparm/5335217).
-Kako biste dobili pregled mogućnosti sqlmap-a, liste podržanih značajki te opis svih opcija i prekidača, zajedno s primjerima, preporučen je uvid u [korisnički priručnik](https://github.com/sqlmapproject/sqlmap/wiki).
+Možete pronaći primjer izvršavanja [ovdje](https://asciinema.org/a/46601).
+Kako biste dobili pregled mogućnosti sqlmap-a, liste podržanih značajki te opis svih opcija i prekidača, zajedno s primjerima, preporučen je uvid u [korisnički priručnik](https://github.com/sqlmapproject/sqlmap/wiki/Usage).
 
 Poveznice
 ----
@@ -45,9 +45,6 @@ Poveznice
 * Prijava problema: https://github.com/sqlmapproject/sqlmap/issues
 * Korisnički priručnik: https://github.com/sqlmapproject/sqlmap/wiki
 * Najčešće postavljena pitanja (FAQ): https://github.com/sqlmapproject/sqlmap/wiki/FAQ
-* Pretplata na mailing listu: https://lists.sourceforge.net/lists/listinfo/sqlmap-users
-* RSS feed mailing liste: http://rss.gmane.org/messages/complete/gmane.comp.security.sqlmap
-* Arhiva mailing liste: http://news.gmane.org/gmane.comp.security.sqlmap
 * Twitter: [@sqlmap](https://twitter.com/sqlmap)
 * Demo: [http://www.youtube.com/user/inquisb/videos](http://www.youtube.com/user/inquisb/videos)
 * Slike zaslona: https://github.com/sqlmapproject/sqlmap/wiki/Screenshots

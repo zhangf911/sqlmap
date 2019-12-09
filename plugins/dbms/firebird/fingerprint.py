@@ -1,16 +1,18 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import re
 
 from lib.core.common import Backend
 from lib.core.common import Format
-from lib.core.common import getUnicode
 from lib.core.common import randomRange
+from lib.core.common import randomStr
+from lib.core.compat import xrange
+from lib.core.convert import getUnicode
 from lib.core.data import conf
 from lib.core.data import kb
 from lib.core.data import logger
@@ -18,7 +20,6 @@ from lib.core.enums import DBMS
 from lib.core.session import setDbms
 from lib.core.settings import FIREBIRD_ALIASES
 from lib.core.settings import METADB_SUFFIX
-from lib.core.settings import UNKNOWN_DBMS_VERSION
 from lib.request import inject
 from plugins.generic.fingerprint import Fingerprint as GenericFingerprint
 
@@ -51,13 +52,14 @@ class Fingerprint(GenericFingerprint):
         value += "active fingerprint: %s" % actVer
 
         if kb.bannerFp:
-            banVer = kb.bannerFp["dbmsVersion"]
+            banVer = kb.bannerFp.get("dbmsVersion")
 
-            if re.search("-log$", kb.data.banner):
-                banVer += ", logging enabled"
+            if banVer:
+                if re.search(r"-log$", kb.data.banner or ""):
+                    banVer += ", logging enabled"
 
-            banVer = Format.getDbms([banVer])
-            value += "\n%sbanner parsing fingerprint: %s" % (blank, banVer)
+                banVer = Format.getDbms([banVer])
+                value += "\n%sbanner parsing fingerprint: %s" % (blank, banVer)
 
         htmlErrorFp = Format.getErrorParsedDBMSes()
 
@@ -69,17 +71,18 @@ class Fingerprint(GenericFingerprint):
     def _sysTablesCheck(self):
         retVal = None
         table = (
-                    ("1.0", ("EXISTS(SELECT CURRENT_USER FROM RDB$DATABASE)",)),
-                    ("1.5", ("NULLIF(%d,%d) IS NULL", "EXISTS(SELECT CURRENT_TRANSACTION FROM RDB$DATABASE)")),
-                    ("2.0", ("EXISTS(SELECT CURRENT_TIME(0) FROM RDB$DATABASE)", "BIT_LENGTH(%d)>0", "CHAR_LENGTH(%d)>0")),
-                    ("2.1", ("BIN_XOR(%d,%d)=0", "PI()>0.%d", "RAND()<1.%d", "FLOOR(1.%d)>=0")),
-                    # TODO: add test for Firebird 2.5
-                 )
+            ("1.0", ("EXISTS(SELECT CURRENT_USER FROM RDB$DATABASE)",)),
+            ("1.5", ("NULLIF(%d,%d) IS NULL", "EXISTS(SELECT CURRENT_TRANSACTION FROM RDB$DATABASE)")),
+            ("2.0", ("EXISTS(SELECT CURRENT_TIME(0) FROM RDB$DATABASE)", "BIT_LENGTH(%d)>0", "CHAR_LENGTH(%d)>0")),
+            ("2.1", ("BIN_XOR(%d,%d)=0", "PI()>0.%d", "RAND()<1.%d", "FLOOR(1.%d)>=0")),
+            ("2.5", ("'%s' SIMILAR TO '%s'",)),  # Reference: https://firebirdsql.org/refdocs/langrefupd25-similar-to.html
+            ("3.0", ("FALSE IS FALSE",)),  # https://www.firebirdsql.org/file/community/conference-2014/pdf/02_fb.2014.whatsnew.30.en.pdf
+        )
 
         for i in xrange(len(table)):
             version, checks = table[i]
             failed = False
-            check = checks[randomRange(0, len(checks) - 1)].replace("%d", getUnicode(randomRange(1, 100)))
+            check = checks[randomRange(0, len(checks) - 1)].replace("%d", getUnicode(randomRange(1, 100))).replace("%s", getUnicode(randomStr()))
             result = inject.checkBooleanExpression(check)
 
             if result:
@@ -103,15 +106,7 @@ class Fingerprint(GenericFingerprint):
         return retVal
 
     def checkDbms(self):
-        if not conf.extensiveFp and (Backend.isDbmsWithin(FIREBIRD_ALIASES) \
-           or (conf.dbms or "").lower() in FIREBIRD_ALIASES) and Backend.getVersion() and \
-           Backend.getVersion() != UNKNOWN_DBMS_VERSION:
-            v = Backend.getVersion().replace(">", "")
-            v = v.replace("=", "")
-            v = v.replace(" ", "")
-
-            Backend.setVersion(v)
-
+        if not conf.extensiveFp and Backend.isDbmsWithin(FIREBIRD_ALIASES):
             setDbms("%s %s" % (DBMS.FIREBIRD, Backend.getVersion()))
 
             self.getBanner()

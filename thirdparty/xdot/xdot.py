@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 #
 # Copyright 2008 Jose Fonseca
 #
@@ -29,6 +29,7 @@ import colorsys
 import time
 import re
 import optparse
+import sys
 
 import gobject
 import gtk
@@ -38,6 +39,8 @@ import cairo
 import pango
 import pangocairo
 
+if sys.version_info >= (3, 0):
+    xrange = range
 
 # See http://www.graphviz.org/pub/scm/graphviz-cairo/plugin/cairo/gvrender_cairo.c
 
@@ -522,7 +525,7 @@ class XDotAttrParser:
         self.parser = parser
         self.buf = buf
         self.pos = 0
-        
+
         self.pen = Pen()
         self.shapes = []
 
@@ -616,7 +619,7 @@ class XDotAttrParser:
             b = b*s
             a = 1.0
             return r, g, b, a
-                
+
         sys.stderr.write("warning: unknown color '%s'\n" % c)
         return None
 
@@ -691,7 +694,7 @@ class XDotAttrParser:
                 sys.exit(1)
 
         return self.shapes
-    
+
     def transform(self, x, y):
         return self.parser.transform(x, y)
 
@@ -763,7 +766,7 @@ class ParseError(Exception):
 
     def __str__(self):
         return ':'.join([str(part) for part in (self.filename, self.line, self.col, self.msg) if part != None])
-        
+
 
 class Scanner:
     """Stateless scanner."""
@@ -897,7 +900,7 @@ class Parser:
 
     def __init__(self, lexer):
         self.lexer = lexer
-        self.lookahead = self.lexer.next()
+        self.lookahead = next(self.lexer)
 
     def match(self, type):
         if self.lookahead.type != type:
@@ -913,7 +916,7 @@ class Parser:
 
     def consume(self):
         token = self.lookahead
-        self.lookahead = self.lexer.next()
+        self.lookahead = next(self.lexer)
         return token
 
 
@@ -1007,7 +1010,7 @@ class DotLexer(Lexer):
             text = text.replace('\\\r\n', '')
             text = text.replace('\\\r', '')
             text = text.replace('\\\n', '')
-            
+
             # quotes
             text = text.replace('\\"', '"')
 
@@ -1151,7 +1154,7 @@ class XDotParser(DotParser):
     def __init__(self, xdotcode):
         lexer = DotLexer(buf = xdotcode)
         DotParser.__init__(self, lexer)
-        
+
         self.nodes = []
         self.edges = []
         self.shapes = []
@@ -1188,7 +1191,7 @@ class XDotParser(DotParser):
                 self.height = max(ymax - ymin, 1)
 
                 self.top_graph = False
-        
+
         for attr in ("_draw_", "_ldraw_", "_hdraw_", "_tdraw_", "_hldraw_", "_tldraw_"):
             if attr in attrs:
                 parser = XDotAttrParser(self, attrs[attr])
@@ -1219,7 +1222,7 @@ class XDotParser(DotParser):
             pos = attrs['pos']
         except KeyError:
             return
-        
+
         points = self.parse_edge_pos(pos)
         shapes = []
         for attr in ("_draw_", "_ldraw_", "_hdraw_", "_tdraw_", "_hldraw_", "_tldraw_"):
@@ -1987,7 +1990,7 @@ class DotWindow(gtk.Window):
         if not entry_text:
             dot_widget.set_highlight(None)
             return
-        
+
         found_items = self.find_text(entry_text)
         dot_widget.set_highlight(found_items)
 
@@ -1997,7 +2000,7 @@ class DotWindow(gtk.Window):
         if not entry_text:
             dot_widget.set_highlight(None)
             return;
-        
+
         found_items = self.find_text(entry_text)
         dot_widget.set_highlight(found_items)
         if(len(found_items) == 1):
@@ -2015,7 +2018,7 @@ class DotWindow(gtk.Window):
         if self.widget.set_xdotcode(xdotcode):
             self.update_title(filename)
             self.widget.zoom_to_fit()
-        
+
     def update_title(self, filename=None):
         if filename is None:
             self.set_title(self.base_title)

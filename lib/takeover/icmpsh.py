@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 import os
+import re
+import socket
 import time
 
 from extra.icmpsh.icmpsh_m import main as icmpshmaster
@@ -20,7 +22,7 @@ from lib.core.data import logger
 from lib.core.data import paths
 from lib.core.exception import SqlmapDataException
 
-class ICMPsh:
+class ICMPsh(object):
     """
     This class defines methods to call icmpsh for plugins.
     """
@@ -54,15 +56,29 @@ class ICMPsh:
         if self.localIP:
             message += "[Enter for '%s' (detected)] " % self.localIP
 
-        while not address:
-            address = readInput(message, default=self.localIP)
+        valid = None
+        while not valid:
+            valid = True
+            address = readInput(message, default=self.localIP or "")
+
+            try:
+                socket.inet_aton(address)
+            except socket.error:
+                valid = False
+            finally:
+                valid = valid and re.search(r"\d+\.\d+\.\d+\.\d+", address) is not None
 
             if conf.batch and not address:
                 raise SqlmapDataException("local host address is missing")
+            elif address and not valid:
+                warnMsg = "invalid local host address"
+                logger.warn(warnMsg)
 
         return address
 
     def _prepareIngredients(self, encode=True):
+        self.localIP = getattr(self, "localIP", None)
+        self.remoteIP = getattr(self, "remoteIP", None)
         self.lhostStr = ICMPsh._selectLhost(self)
         self.rhostStr = ICMPsh._selectRhost(self)
 

@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
+from lib.core.compat import xrange
 from lib.core.enums import PRIORITY
 
 __priority__ = PRIORITY.LOW
 
 def tamper(payload, **kwargs):
     """
-    Replaces space character (' ') with a pound character ('#') followed by
-    a new line ('\n')
+    Replaces space character (' ') with a pound character ('#') followed by a new line ('\n')
 
     Requirement:
         * MSSQL

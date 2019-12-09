@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
+import re
 import time
 
-from extra.safe2bin.safe2bin import safecharencode
 from lib.core.agent import agent
 from lib.core.common import Backend
 from lib.core.common import calculateDeltaSeconds
 from lib.core.common import extractExpectedValue
 from lib.core.common import getCurrentThreadData
-from lib.core.common import getUnicode
 from lib.core.common import hashDBRetrieve
 from lib.core.common import hashDBWrite
 from lib.core.common import isListLike
+from lib.core.convert import getUnicode
 from lib.core.data import conf
 from lib.core.data import kb
 from lib.core.data import logger
@@ -24,7 +24,9 @@ from lib.core.dicts import SQL_STATEMENTS
 from lib.core.enums import CUSTOM_LOGGING
 from lib.core.enums import DBMS
 from lib.core.enums import EXPECTED
+from lib.core.enums import TIMEOUT_STATE
 from lib.core.settings import UNICODE_ENCODING
+from lib.utils.safe2bin import safecharencode
 from lib.utils.timeout import timeout
 
 def direct(query, content=True):
@@ -42,8 +44,14 @@ def direct(query, content=True):
                 select = False
                 break
 
-    if select and not query.upper().startswith("SELECT "):
-        query = "SELECT %s" % query
+    if select:
+        if not query.upper().startswith("SELECT "):
+            query = "SELECT %s" % query
+        if conf.binaryFields:
+            for field in conf.binaryFields:
+                field = field.strip()
+                if re.search(r"\b%s\b" % re.escape(field), query):
+                    query = re.sub(r"\b%s\b" % re.escape(field), agent.hexConvertField(field), query)
 
     logger.log(CUSTOM_LOGGING.PAYLOAD, query)
 
@@ -51,13 +59,18 @@ def direct(query, content=True):
     start = time.time()
 
     if not select and "EXEC " not in query.upper():
-        _ = timeout(func=conf.dbmsConnector.execute, args=(query,), duration=conf.timeout, default=None)
-    elif not (output and "sqlmapoutput" not in query and "sqlmapfile" not in query):
-        output = timeout(func=conf.dbmsConnector.select, args=(query,), duration=conf.timeout, default=None)
-        hashDBWrite(query, output, True)
+        timeout(func=conf.dbmsConnector.execute, args=(query,), duration=conf.timeout, default=None)
+    elif not (output and ("%soutput" % conf.tablePrefix) not in query and ("%sfile" % conf.tablePrefix) not in query):
+        output, state = timeout(func=conf.dbmsConnector.select, args=(query,), duration=conf.timeout, default=None)
+        if state == TIMEOUT_STATE.NORMAL:
+            hashDBWrite(query, output, True)
+        elif state == TIMEOUT_STATE.TIMEOUT:
+            conf.dbmsConnector.close()
+            conf.dbmsConnector.connect()
     elif output:
         infoMsg = "resumed: %s..." % getUnicode(output, UNICODE_ENCODING)[:20]
         logger.info(infoMsg)
+
     threadData.lastQueryDuration = calculateDeltaSeconds(start)
 
     if not output:

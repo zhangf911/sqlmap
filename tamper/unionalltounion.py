@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 """
-Copyright (c) 2006-2015 sqlmap developers (http://sqlmap.org/)
-See the file 'doc/COPYING' for copying permission
+Copyright (c) 2006-2019 sqlmap developers (http://sqlmap.org/)
+See the file 'LICENSE' for copying permission
 """
 
 from lib.core.enums import PRIORITY
@@ -14,7 +14,7 @@ def dependencies():
 
 def tamper(payload, **kwargs):
     """
-    Replaces UNION ALL SELECT with UNION SELECT
+    Replaces instances of UNION ALL SELECT with UNION SELECT counterpart
 
     >>> tamper('-1 UNION ALL SELECT')
     '-1 UNION SELECT'
